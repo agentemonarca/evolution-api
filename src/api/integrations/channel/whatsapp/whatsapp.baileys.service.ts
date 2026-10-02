@@ -500,9 +500,23 @@ export class BaileysStartupService extends ChannelStartupService {
       }
 
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
-      // 408 = request timeout — added per #2501 to avoid reconnect loops on
-      // transient network drops where the server returned a 408 in the close.
-      const codesToNotReconnect = [DisconnectReason.loggedOut, DisconnectReason.forbidden, 402, 406, 408];
+      // 408 (request timeout) FUE RETIRADO de esta lista a proposito.
+      //
+      // Estaba desde #2501 para evitar bucles de reconexion en cortes de red
+      // transitorios. Pero el retardo de 3 s que hay mas abajo antes de llamar a
+      // connectToWhatsapp() ya cubre ese caso, que es lo que motivaba el #2501.
+      //
+      // Dejarlo aqui tenia un coste mucho mayor: un 408 es un timeout de red, no
+      // un cierre de sesion. Al tratarlo como irrecuperable, Evolution marcaba la
+      // instancia como 'close', se negaba a auto-conectarla, y la unica salida era
+      // /instance/connect -> codigo QR -> reemparejar. Y un emparejamiento nuevo
+      // solo recibe de WhatsApp una ventana reciente de historial: las
+      // conversaciones viejas se quedan vacias.
+      //
+      // Medido en produccion (instancia genesis-whatsapp): los cierres con 503 y
+      // 428 reconectan solos; el 408 del 2026-09-30T06:59:30Z dejo la cuenta caida
+      // 64 horas hasta que un humano escaneo un QR.
+      const codesToNotReconnect = [DisconnectReason.loggedOut, DisconnectReason.forbidden, 402, 406];
 
       // FIX: Do not reconnect if it's the initial connection (waiting for QR code)
       // This prevents infinite loop that blocks QR code generation
