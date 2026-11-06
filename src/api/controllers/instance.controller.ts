@@ -35,6 +35,9 @@ export class InstanceController {
   private readonly logger = new Logger('InstanceController');
 
   public async createInstance(instanceData: InstanceDto) {
+    // Solo se deshace (deleteInstance) lo que ESTA petición llegó a guardar: si el fallo ocurre
+    // antes, el nombre puede pertenecer a una instancia existente y borrarla sería catastrófico.
+    let persisted = false;
     try {
       instanceData.instanceName = instanceData.instanceName?.trim();
 
@@ -73,6 +76,7 @@ export class InstanceController {
         businessId: instanceData.businessId,
         status: instanceData.status,
       });
+      persisted = true;
 
       instance.setInstance({
         instanceName: instanceData.instanceName,
@@ -306,7 +310,9 @@ export class InstanceController {
         },
       };
     } catch (error) {
-      this.waMonitor.deleteInstance(instanceData.instanceName);
+      if (persisted) {
+        this.waMonitor.deleteInstance(instanceData.instanceName);
+      }
       this.logger.error(isArray(error.message) ? error.message[0] : error.message);
       throw new BadRequestException(isArray(error.message) ? error.message[0] : error.message);
     }

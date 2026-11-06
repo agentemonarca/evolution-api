@@ -2,6 +2,7 @@ import { GetParticipant, GroupInvite } from '@api/dto/group.dto';
 import { InstanceDto } from '@api/dto/instance.dto';
 import { Logger } from '@config/logger.config';
 import { BadRequestException } from '@exceptions';
+import { CREATE_INSTANCE_ROUTE, isRoute } from '@utils/route-key';
 import { Request } from 'express';
 import { JSONSchema7 } from 'json-schema';
 import { validate } from 'jsonschema';
@@ -34,20 +35,15 @@ export function sanitizeUntrustedInput(
 }
 
 /**
- * Rutas cuyo `instanceName` SOLO puede venir del body, porque no llevan `:instanceName` en la URL.
- * Hoy es únicamente POST /instance/create. Se compara la ruta que Express resolvió
+ * ¿Es la ruta cuyo `instanceName` SOLO puede venir del body? Hoy únicamente POST /instance/create,
+ * que no lleva `:instanceName` en la URL. Se compara la ruta que Express resolvió
  * (`baseUrl` + `route.path`), NUNCA `originalUrl.includes(...)`: eso también casa con una query
  * como `/message/sendText/A?x=/instance/create` y reabriría el bypass entre instancias.
  */
-const BODY_INSTANCE_NAME_ROUTES = new Set(['POST /instance/create']);
-
 export function isBodyInstanceNameRoute(request: Request): boolean {
   const params = (request?.params ?? {}) as Record<string, any>;
   if (params.instanceName !== undefined || params.instanceId !== undefined) return false;
-  const routePath = typeof request?.route?.path === 'string' ? request.route.path : undefined;
-  if (routePath === undefined) return false;
-  const key = `${String(request.method).toUpperCase()} ${request.baseUrl ?? ''}${routePath}`;
-  return BODY_INSTANCE_NAME_ROUTES.has(key);
+  return isRoute(request, CREATE_INSTANCE_ROUTE);
 }
 
 export abstract class RouterBroker {
@@ -70,12 +66,11 @@ export abstract class RouterBroker {
       Object.assign(instance, sanitizeUntrustedInput(request.query as Record<string, any>));
     }
 
-    if (request.originalUrl.includes('/instance/create')) {
+    if (isBodyInstanceNameRoute(request)) {
       // En /instance/create no hay :instanceName en la URL: el nombre de la instancia NUEVA solo
       // puede venir del body. Se deja pasar únicamente en esa ruta exacta (instanceId sigue
       // filtrado: lo genera el servidor). En cualquier otra ruta se sigue descartando.
-      const allowed =
-        isBodyInstanceNameRoute(request) && typeof body?.instanceName === 'string' ? ['instanceName'] : [];
+      const allowed = typeof body?.instanceName === 'string' ? ['instanceName'] : [];
       Object.assign(instance, sanitizeUntrustedInput(body, allowed));
     }
 

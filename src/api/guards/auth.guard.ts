@@ -3,6 +3,7 @@ import { prismaRepository } from '@api/server.module';
 import { Auth, configService, Database } from '@config/env.config';
 import { Logger } from '@config/logger.config';
 import { ForbiddenException, UnauthorizedException } from '@exceptions';
+import { CREATE_INSTANCE_ROUTE, FETCH_INSTANCES_ROUTE, isRoute } from '@utils/route-key';
 import { NextFunction, Request, Response } from 'express';
 
 const logger = new Logger('GUARD');
@@ -20,7 +21,9 @@ async function apikey(req: Request, _: Response, next: NextFunction) {
     return next();
   }
 
-  if ((req.originalUrl.includes('/instance/create') || req.originalUrl.includes('/instance/fetchInstances')) && !key) {
+  // Crear instancias exige SIEMPRE la clave global. Se decide por la ruta resuelta por Express,
+  // no por originalUrl.includes(): la query (`?x=/instance/fetchInstances`) no debe abrir nada.
+  if (isRoute(req, CREATE_INSTANCE_ROUTE)) {
     throw new ForbiddenException('Missing global api key', 'The global api key must be set');
   }
   const param = req.params as unknown as InstanceDto;
@@ -34,7 +37,7 @@ async function apikey(req: Request, _: Response, next: NextFunction) {
         return next();
       }
     } else {
-      if (req.originalUrl.includes('/instance/fetchInstances') && db.SAVE_DATA.INSTANCE) {
+      if (isRoute(req, FETCH_INSTANCES_ROUTE) && db.SAVE_DATA.INSTANCE) {
         const instanceByKey = await prismaRepository.instance.findFirst({
           where: { token: key },
         });

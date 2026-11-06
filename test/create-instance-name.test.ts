@@ -93,3 +93,24 @@ test('bypass cerrado: body instanceName en otra ruta de /instance', async () => 
   const r = await post('/instance/restart/A?x=/instance/create', { instanceName: 'B' });
   assert.equal(r.json.instanceName, 'A');
 });
+
+test('route-key: la query no cambia la ruta resuelta; mayúsculas y barra final sí casan', async () => {
+  const { resolvedRouteKey } = await import('@utils/route-key');
+  const app = express();
+  const r = Router();
+  r.post('/create', (req, res) => res.json({ key: resolvedRouteKey(req) }));
+  r.get('/fetchInstances', (req, res) => res.json({ key: resolvedRouteKey(req) }));
+  app.use('/instance', r);
+  const srv = app.listen(0);
+  await new Promise((ok) => srv.once('listening', ok));
+  const b = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+  const k = async (m: string, p: string) => (await (await fetch(b + p, { method: m })).json()).key;
+  try {
+    assert.equal(await k('POST', '/instance/create?x=/instance/fetchInstances'), 'post /instance/create');
+    assert.equal(await k('POST', '/INSTANCE/CREATE'), 'post /instance/create');
+    assert.equal(await k('POST', '/instance/create/'), 'post /instance/create');
+    assert.equal(await k('GET', '/instance/fetchInstances?x=/instance/create'), 'get /instance/fetchinstances');
+  } finally {
+    srv.close();
+  }
+});

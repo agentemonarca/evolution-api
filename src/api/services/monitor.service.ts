@@ -259,6 +259,9 @@ export class WAMonitoringService {
       });
     } catch (error) {
       this.logger.error(error);
+      // Propagar: si no, createInstance sigue como si la fila existiera y termina en
+      // Setting_instanceId_fkey (o pisando en memoria una instancia con el mismo nombre).
+      throw error;
     }
   }
 
